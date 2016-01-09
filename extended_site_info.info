@@ -1,0 +1,8 @@
+name = Extended Site Info
+description = Provide an extended fields on the site-information page with several blocks
+package = Custom
+core = 7.x
+version = 7.x-1.x
+
+;files[] =
+;dependencies[] = 

@@ -1,0 +1,248 @@
+<?php
+
+/**
+ * @file
+ * information about the site
+ */
+
+define('ABOUT_THE_SITE_TITLE', 'Over deze website');
+define('SITE_CONTACT_TITLE', 'Contact info');
+
+/**
+ * Implements hook_form_FORM_ID_alter
+ */
+function extended_site_info_form_system_site_information_settings_alter(&$form, &$form_state, $form_id) {
+
+  $form['objective'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('About the site objective of the site'),
+    '#description' => t(
+      'Information that tells about the objective of the site.
+      It can be shown for example in a block or in the footer.'
+    ),
+  );
+
+  $form['objective']['objective_title'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Title'),
+    '#default_value' => variable_get('objective_title', ABOUT_THE_SITE_TITLE),
+    '#description' => t(
+      "@none to leave empty",
+      array('@none' => '<none>')
+    ),
+  );
+
+  $form['objective']['objective_text'] = array(
+    '#type' => 'textarea',
+    '#rows' => 10,
+    '#columns' => 40,
+    '#title' => t('Description about the site'),
+    '#required' => TRUE,
+    '#default_value' => variable_get('objective_text', 'text over de site'),
+  );
+
+  $form['contact'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Contact information'),
+    '#description' => t(
+      'The contact information belonging to the site'
+    ),
+  );
+
+  $form['contact']['site_contact_title'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Title'),
+    '#default_value' => variable_get('site_contact_title', SITE_CONTACT_TITLE),
+    '#description' => t(
+      "@none to leave empty",
+      array('@none' => '<none>')
+    ),
+  );
+
+  $form['contact']['site_contact_phone'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Phone'),
+    '#description' => t('a readable phone number like: 01 - 2345 6789'),
+    '#default_value' => variable_get('site_contact_phone', ''),
+  );
+  // hidden field to save the phone as link
+  $form['contact']['site_contact_phone_link'] = array(
+    '#type' => 'textfield',
+    '#access' => FALSE,
+    '#default_value' => variable_get('site_contact_phone_link', ''),
+  );
+
+  $form['contact']['site_contact_email'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Email'),
+    '#description' => t('an email address like: email@address.com'),
+    '#default_value' => variable_get('site_contact_email', ''),
+  );
+  // hidden field to save the email as link
+  $form['contact']['site_contact_email_link'] = array(
+    '#type' => 'textfield',
+    '#access' => FALSE,
+    '#default_value' => variable_get('site_contact_email_link', ''),
+  );
+
+  $form['#validate'][] = '_html_encode_form_validate';
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function extended_site_info_block_info() {
+  $blocks = array();
+
+  $blocks['site_objective'] = array(
+    'info' => t('A description of the objective of the site'),
+    'cache' => DRUPAL_CACHE_GLOBAL,
+  );
+  $blocks['contact_info'] = array(
+    'info' => t('The contact info related to the site'),
+    'cache' => DRUPAL_CACHE_GLOBAL,
+  );
+  $blocks['contact_info_small'] = array(
+    'info' => t('Small version of contact info, for example in footer'),
+    'cache' => DRUPAL_CACHE_GLOBAL,
+  );
+
+  return $blocks;
+}
+
+/**
+ *  Implementation of custom form validate function to encode html to ascii urls
+ *
+ *  Inspired by the invisimail module http://cgit.drupalcode.org/invisimail here
+ *  is a form validate function that create email and phone urls with obfuscated HTML
+ *
+ *  @param array $form
+ *    the form array that is calling the validate function
+ *  @param array $form_state
+ *    the form state array of the submitted form with the values that we are editing
+ *    with this validation function
+ */
+function _html_encode_form_validate(&$form, &$form_state){
+  // when the phone is filled in we want it to assign the correct value to the phone link
+  if (!empty($form_state['values']['site_contact_phone'])) {
+    $form_state['values']['site_contact_phone_link'] = _extended_site_info_phone_link($form_state['values']['site_contact_phone']);
+  // when there is no phone number filled in but the phone link exist we want to empty it
+  } elseif (!empty($form_state['values']['site_contact_phone_link'])) {
+    $form_state['values']['site_contact_phone_link'] = '';
+  }
+  // when the email is filled in we want it to assign the correct value to the email link
+  if (!empty($form_state['values']['site_contact_email'])) {
+    $form_state['values']['site_contact_email_link'] = _extended_site_info_email_link($form_state['values']['site_contact_email']);
+  // when there is no email filled in but the email link exist we want to empty it
+  } elseif (!empty($form_state['values']['site_contact_email_link'])) {
+    $form_state['values']['site_contact_email_link'] = '';
+  }
+}
+
+/**
+ * Translates a string into its HTML entity version.
+ *
+ * Borrowed from the invisimail module: http://cgit.drupalcode.org/invisimail
+ * Unlike PHP's htmlentities() and htmlspecialchars() functions, this function
+ * will convert all characters in the string unequivocably.  That makes it useful
+ * for obfuscation, since browsers will treat the string exactly the same but
+ * most humans and spambots won't have a clue how to read it.
+ *
+ * @param string $string
+ *   An arbitrary string to encode as HTML entities.
+ * @return string
+ *   The same string encoded in raw, obfuscated HTML entities.
+ */
+function _extended_site_info_encode_html($string) {
+  $encode = '';
+  for ($i=0; $i < strlen($string); $i++)   {
+    $char = substr($string, $i, 1);
+    $encode .= '&#'.ord($char).';';
+  }
+  return $encode;
+}
+
+/**
+ *  Create a link from the phone number
+ *
+ *  @param string $phone_number
+ *    a human readable phone number, for example: 06 - 12 345 678
+ *
+ *  @return string
+ *    The phone number as a link
+ *    for example: <a href="tel:0629537250" >06 - 12 345 678</a>
+ */
+function _extended_site_info_phone_link($phone_number) {
+  $phone_condensed_to_dial = preg_replace("/\D/", "", $phone_number);
+  $phone_link_url = _extended_site_info_encode_html("tel:" . $phone_condensed_to_dial);
+  $phone_link_text = _extended_site_info_encode_html("tel: " . $phone_number);
+  return '<a href="' . $phone_link_url . '">' . $phone_link_text . '</a>';
+}
+
+/**
+ *  Create a link from an email adres
+ *
+ *  @param string $email
+ *    a plan email address, for example: email@address.org
+ *
+ *  @return string
+ *    The email address as a link
+ *    for example: <a href="mailto:email@address.org" >email@address.org</a>
+ */
+function _extended_site_info_email_link($email){
+  $email_link_url = _extended_site_info_encode_html("mailto:" . $email);
+  $email_link_text = _extended_site_info_encode_html("email: " . $email);
+  return '<a href="' . $email_link_url . '">' . $email_link_text . '</a>';
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function extended_site_info_block_view($delta = '') {
+  $phone =  variable_get('site_contact_phone_link');
+  $email =  variable_get('site_contact_email_link');
+
+  $block = array();
+  switch($delta) {
+    case 'site_objective':
+      $title = variable_get('objective_title');
+      $content = array(
+        '#markup' => '<div>' . variable_get('objective_text') . '</div>',
+      );
+
+      $block = array(
+        'subject' => t($title),
+        'content' => $content,
+      );
+      break;
+    case 'contact_info':
+      $contact_info = array();
+      !empty($phone) ? $contact_info['phone'] = $phone : '';
+      !empty($email) ? $contact_info['email'] = $email : '';
+        $content = array(
+        '#theme' => 'item_list',
+        '#items' => $contact_info,
+      );
+
+      $block = array(
+        'subject' => variable_get('site_contact_title'),
+        'content' => $content,
+      );
+      break;
+    case 'contact_info_small':
+      $contact_info = array(
+        'phone' => variable_get('site_contact_phone_link'),
+        'email' => variable_get('site_contact_email_link'),
+      );
+      $content = array(
+        '#theme' => 'item_list',
+        '#items' => $contact_info,
+      );
+
+      $block = array(
+        'content' => $content,
+      );
+      break;
+  }
+  return $block;
+}
