@@ -2,16 +2,20 @@ README.txt
 ==========
 
 This module extends the site information page admin/config/system/site-information
-with two fieldsets:
+In the 'seperate-form' branch the extension is placed to a seperate form and page with
+seperate permisson: 'Administer extended site settings'
+The form has two fieldsets:
 - about
 - contact info
 
-The module is just a template to have hotstart for extra fields on the site
-information page (or other pages / forms). If you need more fields, copy the module
+The module is just a template to have a hotstart for an extra form on the site
+configuration page's (or other pages / forms). If you need more fields, copy the module
 and add the extra fields.
 
 You can use the blocks that are provided by this module. But you can also retrieve the
 values by variable_get('the_name_of_the_variable');
+
+
 
 ABOUT
 =====
