@@ -9,9 +9,27 @@ define('ABOUT_THE_SITE_TITLE', 'Over deze website');
 define('SITE_CONTACT_TITLE', 'Contact info');
 
 /**
- * Implements hook_form_FORM_ID_alter
+ * Implements hook_menu().
  */
-function extended_site_info_form_system_site_information_settings_alter(&$form, &$form_state, $form_id) {
+function extended_site_info_menu() {
+  $items = array();
+  $items['admin/config/system/extended-site-information'] = array(
+    'title' => 'Extended site information',
+    'description' => t('email, phone and site objective'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('extended_site_info_settings'),
+    'access arguments' => array('administer extended site settings'),
+    'weight' => -20,
+  );
+
+  return $items;
+}
+
+/**
+ * Form builder; The extended site information form.
+ *
+ */
+function extended_site_info_settings() {
 
   $form['objective'] = array(
     '#type' => 'fieldset',
@@ -86,6 +104,21 @@ function extended_site_info_form_system_site_information_settings_alter(&$form, 
   );
 
   $form['#validate'][] = '_html_encode_form_validate';
+
+  return system_settings_form($form);
+}
+
+/**
+ * Implements hook_permission().
+ *
+ * A seperate permission to assign for example to a non-technical site-admin role
+ */
+function extended_site_info_permission() {
+  return array(
+    'administer extended site settings' => array(
+      'title' => t('Administer extended site settings'),
+    ),
+  );
 }
 
 /**
