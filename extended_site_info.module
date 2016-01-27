@@ -9,6 +9,160 @@ define('ABOUT_THE_SITE_TITLE', 'Over deze website');
 define('SITE_CONTACT_TITLE', 'Contact info');
 
 /**
+ * Implements hook_menu().
+ */
+function extended_site_info_menu() {
+  $items = array();
+  $items['contact'] = array(
+    'title' => 'Contact pagina',
+    'description' => t('email, phone and site objective'),
+    'page callback' => 'contact_page',
+    'access callback' => TRUE,
+    'file' => 'contact.page.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_theme().
+ *
+ * Register the following theme implementations:
+ *   - contact_page: contact items and about (provides a contact-page.tpl.php).
+ *   - contact_block: same as above but with a link to the contact page
+ *
+ * @see contact-page.tpl.php
+ */
+function extended_site_info_theme($existing, $type, $theme, $path) {
+  return array(
+    'contact_page' => array(
+      'arguments' => array('output' => NULL),
+      // Use a template and give the template's name.
+      'template' => 'contact-page',
+
+      // Specify the default variable names and their values.
+      'variables' => array('contact_items' => NULL, 'about' => NULL,),
+
+      // Add a partial pattern to help hook theme suggestion matches
+      'pattern' => 'contact__',
+
+      // We don't use this theme function often, so let's put it in  a
+      // seperate file that is lazy loaded, if needed.
+      'file' => 'contact.page.inc',
+    ),
+
+    'contact_block' => array(
+      // Specify the default variable names and their values.
+      'variables' => array('contact_items' => NULL, 'about' => NULL,),
+    ),
+
+    'contact_block_wrapper' => array(
+      'render element' => 'element',
+    ),
+  );
+}
+
+/**
+ * Helper function to fetch all contact items
+ *
+ * @return array of site info values, like phone, email etc.
+ */
+function get_site_info_values() {
+  // In stead of variable_get() we retrieve the info values by accessing the
+  // global $conf array.
+  // In this way we don't have to change this function when there are
+  // new site_contact_* variables available
+
+  global $conf; // the global array with all variable table values
+  $info = array();
+
+  // We do know what items we don't want to return so these are placed in the
+  // $unwanted list and filtered out with array_diff_key()
+  $unwanted = array(
+    'site_contact_title',
+    'site_contact_phone', // we are using the site_contact_phone_link instead
+    'site_contact_email', // we are using the site_contact_email_link instead
+  );
+
+  // remove the unwanted items from the array and search for the remaining
+  // items with a key that starts with site_contact_
+  $filtered_conf = array_diff_key($conf, array_flip($unwanted));
+  foreach($filtered_conf as $key => $value) {
+    if (preg_match("/^site_contact_/", $key)) {
+      $info[] = $value;
+    }
+  }
+
+  return $info;
+}
+
+/**
+ * Preprocesses variables for theme_contact_block
+ *
+ * @param $variables
+ *   An array containing the following elements:
+ *   - contact_items: an array of contact items such as phone, email etc.
+ *   - about: a description about the purpose of the site
+ *
+ */
+function template_preprocess_contact_block(&$variables) {
+  $variables['contact_list'] = array(
+    '#theme' => 'item_list',
+    '#items' => $variables['contact_items'],
+  );
+}
+
+/**
+ * Returns HTML for a contact block
+ *
+ * @param $variables
+ * An array containing the following elements:
+ *   - contact_items: an array of contact items such as phone, email etc.
+ *   - contact_list: the above items rendered with theme_item_list
+ *   - about: a description about the purpose of the site
+ *
+ */
+function theme_contact_block($variables) {
+  $output = '';
+  $output .= render($variables['contact_list']);
+  return $output;
+}
+
+/**
+ * Process variables for contact-block-wrapper.tpl.php.
+ *
+ */
+
+function template_preprocess_contact_block_wrapper(&$variables) {
+  $variables['contact_url'] = '';
+  // if there is a #contact_page_path given and it is not the same
+  // as the current url than assign it to the contact_url variable
+  if (isset($variables['element']['#contact_page_path'])) {
+    $path = $variables['element']['#contact_page_path'];
+    $variables['contact_url'] = in_array($path, arg()) ? '' : l('contact pagina', $path);
+  }
+  // assign the children that needs to be rendered
+  $variables['site_info'] = $variables['element']['#children'];
+}
+
+/**
+ * Implementation of theme_hook for contact_block_wrapper
+ *
+ * @param $variables
+ *  The array of available variables for the theme function
+ * @return string
+ *  The returned html
+ */
+function theme_contact_block_wrapper(&$variables) {
+
+  $output = '<div class="contact_wrapper">' ;
+  $output .= $variables['site_info'] ;
+  $output .= $variables['contact_url'];
+  $output .= '</div>';
+  return $output;
+}
+
+/**
  * Implements hook_form_FORM_ID_alter
  */
 function extended_site_info_form_system_site_information_settings_alter(&$form, &$form_state, $form_id) {
@@ -58,7 +212,7 @@ function extended_site_info_form_system_site_information_settings_alter(&$form, 
       array('@none' => '<none>')
     ),
   );
-
+  // this field is used in the form, for output we use the encoded site_contact_phone_link variable
   $form['contact']['site_contact_phone'] = array(
     '#type' => 'textfield',
     '#title' => t('Phone'),
@@ -71,7 +225,7 @@ function extended_site_info_form_system_site_information_settings_alter(&$form, 
     '#access' => FALSE,
     '#default_value' => variable_get('site_contact_phone_link', ''),
   );
-
+  // this field is used in the form, for output we use the encoded site_contact_email_link variable
   $form['contact']['site_contact_email'] = array(
     '#type' => 'textfield',
     '#title' => t('Email'),
@@ -116,25 +270,27 @@ function extended_site_info_block_info() {
  *  Inspired by the invisimail module http://cgit.drupalcode.org/invisimail here
  *  is a form validate function that create email and phone urls with obfuscated HTML
  *
- *  @param array $form
+ * @param array $form
  *    the form array that is calling the validate function
- *  @param array $form_state
+ * @param array $form_state
  *    the form state array of the submitted form with the values that we are editing
  *    with this validation function
  */
-function _html_encode_form_validate(&$form, &$form_state){
+function _html_encode_form_validate(&$form, &$form_state) {
   // when the phone is filled in we want it to assign the correct value to the phone link
   if (!empty($form_state['values']['site_contact_phone'])) {
     $form_state['values']['site_contact_phone_link'] = _extended_site_info_phone_link($form_state['values']['site_contact_phone']);
-  // when there is no phone number filled in but the phone link exist we want to empty it
-  } elseif (!empty($form_state['values']['site_contact_phone_link'])) {
+    // when there is no phone number filled in but the phone link exist we want to empty it
+  }
+  elseif (!empty($form_state['values']['site_contact_phone_link'])) {
     $form_state['values']['site_contact_phone_link'] = '';
   }
   // when the email is filled in we want it to assign the correct value to the email link
   if (!empty($form_state['values']['site_contact_email'])) {
     $form_state['values']['site_contact_email_link'] = _extended_site_info_email_link($form_state['values']['site_contact_email']);
-  // when there is no email filled in but the email link exist we want to empty it
-  } elseif (!empty($form_state['values']['site_contact_email_link'])) {
+    // when there is no email filled in but the email link exist we want to empty it
+  }
+  elseif (!empty($form_state['values']['site_contact_email_link'])) {
     $form_state['values']['site_contact_email_link'] = '';
   }
 }
@@ -155,9 +311,9 @@ function _html_encode_form_validate(&$form, &$form_state){
  */
 function _extended_site_info_encode_html($string) {
   $encode = '';
-  for ($i=0; $i < strlen($string); $i++)   {
+  for ($i = 0; $i < strlen($string); $i++) {
     $char = substr($string, $i, 1);
-    $encode .= '&#'.ord($char).';';
+    $encode .= '&#' . ord($char) . ';';
   }
   return $encode;
 }
@@ -165,10 +321,10 @@ function _extended_site_info_encode_html($string) {
 /**
  *  Create a link from the phone number
  *
- *  @param string $phone_number
+ * @param string $phone_number
  *    a human readable phone number, for example: 06 - 12 345 678
  *
- *  @return string
+ * @return string
  *    The phone number as a link
  *    for example: <a href="tel:0629537250" >06 - 12 345 678</a>
  */
@@ -182,14 +338,14 @@ function _extended_site_info_phone_link($phone_number) {
 /**
  *  Create a link from an email adres
  *
- *  @param string $email
+ * @param string $email
  *    a plan email address, for example: email@address.org
  *
- *  @return string
+ * @return string
  *    The email address as a link
  *    for example: <a href="mailto:email@address.org" >email@address.org</a>
  */
-function _extended_site_info_email_link($email){
+function _extended_site_info_email_link($email) {
   $email_link_url = _extended_site_info_encode_html("mailto:" . $email);
   $email_link_text = _extended_site_info_encode_html("email: " . $email);
   return '<a href="' . $email_link_url . '">' . $email_link_text . '</a>';
@@ -199,11 +355,8 @@ function _extended_site_info_email_link($email){
  * Implements hook_block_view().
  */
 function extended_site_info_block_view($delta = '') {
-  $phone =  variable_get('site_contact_phone_link');
-  $email =  variable_get('site_contact_email_link');
-
   $block = array();
-  switch($delta) {
+  switch ($delta) {
     case 'site_objective':
       $title = variable_get('objective_title');
       $content = array(
@@ -216,12 +369,11 @@ function extended_site_info_block_view($delta = '') {
       );
       break;
     case 'contact_info':
-      $contact_info = array();
-      !empty($phone) ? $contact_info['phone'] = $phone : '';
-      !empty($email) ? $contact_info['email'] = $email : '';
-        $content = array(
-        '#theme' => 'item_list',
-        '#items' => $contact_info,
+      $content = array(
+        '#theme' => 'contact_block',
+        '#contact_items' => get_site_info_values(),
+        '#contact_page_path' => 'contact',
+        '#theme_wrappers' => array('contact_block_wrapper', ),
       );
 
       $block = array(
@@ -230,13 +382,9 @@ function extended_site_info_block_view($delta = '') {
       );
       break;
     case 'contact_info_small':
-      $contact_info = array(
-        'phone' => variable_get('site_contact_phone_link'),
-        'email' => variable_get('site_contact_email_link'),
-      );
       $content = array(
         '#theme' => 'item_list',
-        '#items' => $contact_info,
+        '#items' => get_site_info_values(),
       );
 
       $block = array(
